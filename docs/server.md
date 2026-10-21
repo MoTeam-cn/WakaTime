@@ -21,7 +21,32 @@ docker run -d --name wakatime \
 
 浏览器打开 `http://192.168.1.10:8800` → 自动跳 `/setup` 创建管理员。
 
-### 用南大镜像源自建
+### 用南大 GHCR 代理（国内推荐）
+
+南京大学镜像站提供 GHCR 代理，无需登录、无需翻墙：
+
+```bash
+docker run -d --name wakatime \
+  --restart unless-stopped \
+  -p 8800:8800 \
+  -v waka-data:/data \
+  -e PUBLIC_URL=http://192.168.1.10:8800 \
+  -e JWT_SECRET=换成一串随机字符 \
+  ghcr.nju.edu.cn/moteam-cn/wakatime:0.3.4
+```
+
+规则就是把 `ghcr.io/` 换成 `ghcr.nju.edu.cn/`。
+
+**前提**：镜像包必须是 public。在 https://github.com/orgs/MoTeam-cn/packages/container/wakatime/settings 底部把可见性改成 Public，否则代理返回 404。
+
+也可以用 `docker tag` 换成官方名字再跑：
+
+```bash
+docker pull ghcr.nju.edu.cn/moteam-cn/wakatime:0.3.4
+docker tag ghcr.nju.edu.cn/moteam-cn/wakatime:0.3.4 ghcr.io/moteam-cn/wakatime:0.3.4
+```
+
+### 用南大 Docker Hub 源自建
 
 南大镜像站 `https://docker.nju.edu.cn` 只能加速 Docker Hub 的基础镜像，GHCR 的镜像不在里面。要自建：
 

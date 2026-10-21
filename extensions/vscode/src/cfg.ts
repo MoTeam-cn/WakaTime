@@ -3,7 +3,8 @@ import { DEFAULTS, readIniConfig, applyIni } from "./config-schema.ts";
 import type { WakaConfig } from "./config-schema.ts";
 
 export type { WakaConfig, BoolOrList } from "./config-schema.ts";
-export { DEFAULTS, configFilePath, wakatimeHome, parseIni, readIniConfig, writeIniValue } from "./config-schema.ts";
+export { DEFAULTS, configFilePath, legacyConfigPath, wakatimeHome, parseIni, readIniConfig, writeIniValue } from "./config-schema.ts";
+import { legacyConfigPath, readIniConfig as readIni } from "./config-schema.ts";
 
 /** VS Code 设置覆盖（优先级高于 wakatime.cfg） */
 function applySettings(base: WakaConfig): WakaConfig {
@@ -53,4 +54,15 @@ export function readConfig(): WakaConfig {
   c = applyIni(c, ini);
   c = applySettings(c);
   return c;
+}
+
+/** 是否已完成必要配置（服务端地址 + API Key） */
+export function isConfigured(config: WakaConfig): boolean {
+  return config.apiUrl.trim().length > 0 && config.apiKey.trim().length > 0;
+}
+
+/** 官方插件配置文件里是否有 api_key（用于提示用户，不会自动读取） */
+export function hasLegacyConfig(): boolean {
+  const ini = readIni(legacyConfigPath());
+  return typeof ini.api_key === "string" && ini.api_key.trim().length > 0;
 }

@@ -56,11 +56,19 @@ export class StatusBar {
     this.item.show();
 
     const ctx = this.getContext();
-    if (!config.apiKey) {
-      this.item.text = "$(clock) 未配置 API Key";
-      this.item.tooltip = "运行命令 waka-selfhost: 设置 API Key";
+    if (!config.apiUrl) {
+      this.item.command = "wakaSelfhost.setup";
+      this.item.text = "$(warning) 未配置服务地址";
+      this.item.tooltip = "点击设置服务端地址，例如 http://192.168.1.10:8800/v1";
       return;
     }
+    if (!config.apiKey) {
+      this.item.command = "wakaSelfhost.setup";
+      this.item.text = "$(warning) 未配置 API Key";
+      this.item.tooltip = "点击配置，或运行命令 waka-selfhost: 设置服务端地址与 API Key";
+      return;
+    }
+    this.item.command = "wakaSelfhost.openDashboard";
 
     let payload: TodayPayload | null = null;
     try {
@@ -72,8 +80,25 @@ export class StatusBar {
         { proxy: config.proxy, timeoutMs: Math.max(5, config.timeout) * 1000, noSslVerify: config.noSslVerify }
       );
       if (res.status !== 200) {
-        this.lastError = "HTTP " + res.status;
-        this.item.text = "$(clock) 连接失败";
+        this.lastError = "HTTP " + res.status + " " + res.text.slice(0, 160);
+        if (res.status === 401 || res.status === 403) {
+          this.item.text = "$(error) API Key 无效";
+          this.item.tooltip = [
+            "服务端拒绝了凭据（HTTP " + res.status + "）",
+            "地址：" + config.apiUrl,
+            "检查 API Key 是否完整复制，或该 Key 是否已被吊销",
+          ].join("\n");
+        } else if (res.status === 404) {
+          this.item.text = "$(error) 地址不对";
+          this.item.tooltip = [
+            "请求返回 404，说明这个路径不存在",
+            "请求：" + config.apiUrl + "/users/current/status_bar/today",
+            "地址必须以 /v1 结尾，例如 http://192.168.1.10:8800/v1",
+          ].join("\n");
+        } else {
+          this.item.text = "$(warning) 服务端错误 " + res.status;
+          this.item.tooltip = res.text.slice(0, 240) || "HTTP " + res.status;
+        }
         return;
       }
       const parsed = JSON.parse(res.text) as { data?: TodayPayload };
@@ -82,7 +107,13 @@ export class StatusBar {
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       this.log("状态栏刷新失败: " + this.lastError);
-      this.item.text = "$(clock) 离线";
+      this.item.text = "$(plug) 连不上服务器";
+      this.item.tooltip = [
+        "请求失败：" + this.lastError,
+        "地址：" + config.apiUrl,
+        "检查服务端是否已启动、端口是否放行、地址是否可达",
+        "运行 waka-selfhost: 诊断 可看完整连通性报告",
+      ].join("\n");
       return;
     }
 

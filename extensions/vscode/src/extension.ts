@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { readConfig, writeIniValue, configFilePath } from "./cfg.ts";
+import { readConfig, writeIniValue, configFilePath, isConfigured, hasLegacyConfig } from "./cfg.ts";
 import type { WakaConfig } from "./cfg.ts";
 import { detectProject, hasProjectFileNear } from "./project.ts";
 import { normalizeLanguage } from "./language.ts";
@@ -97,6 +97,7 @@ function buildHeartbeat(
 ): QueuedHeartbeat | null {
   const config = cfg();
   if (!config.enabled || paused) return null;
+  if (!isConfigured(config)) return null;
 
   const hasProject = hasProjectFileNear(entityPath);
   if (!shouldTrack(entityPath, hasProject, config)) return null;
@@ -341,6 +342,41 @@ function registerCommands(context: vscode.ExtensionContext, subscriptions: vscod
     subscriptions.push(vscode.commands.registerCommand(id, handler));
   };
 
+  reg("wakaSelfhost.setup", async () => {
+    const current = cfg();
+
+    const url = await vscode.window.showInputBox({
+      title: "waka-selfhost：服务端地址",
+      prompt: "填到 /v1 结尾，例如 http://192.168.1.10:8800/v1",
+      value: current.apiUrl || "http://localhost:8800/v1",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        const t = v.trim();
+        if (!/^https?:\/\//.test(t)) return "必须以 http:// 或 https:// 开头";
+        if (!/\/v1\/?$/.test(t)) return "必须以 /v1 结尾";
+        return null;
+      },
+    });
+    if (url === undefined) return;
+    writeIniValue("api_url", url.trim().replace(/\/+$/, ""));
+
+    const key = await vscode.window.showInputBox({
+      title: "waka-selfhost：API Key",
+      prompt: "在服务端「设置」页面生成，waka_ 开头",
+      password: true,
+      value: current.apiKey,
+      ignoreFocusOut: true,
+      validateInput: (v) => (v.trim().length < 8 ? "Key 看起来不完整" : null),
+    });
+    if (key === undefined) return;
+    writeIniValue("api_key", key.trim());
+
+    const next = cfg();
+    statusBar.applyLayout(next);
+    statusBar.start(next);
+    void vscode.window.showInformationMessage("已保存到 " + configFilePath());
+  });
+
   reg("wakaSelfhost.apikey", async () => {
     const value = await promptApiKey();
     if (value === undefined) return;
@@ -493,6 +529,28 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   emitFromEditor(vscode.window.activeTextEditor, true);
+  void maybeOnboard(context);
+}
+
+/** 未配置时引导一次；检测到官方配置时说明两者互不影响 */
+async function maybeOnboard(context: vscode.ExtensionContext): Promise<void> {
+  const config = cfg();
+  if (isConfigured(config)) return;
+
+  const flagKey = "wakaSelfhost.onboarded";
+  if (context.globalState.get<boolean>(flagKey)) return;
+  await context.globalState.update(flagKey, true);
+
+  const legacyHint = hasLegacyConfig()
+    ? "\n检测到 ~/.wakatime.cfg 里有官方插件的配置。本扩展使用独立文件 ~/.waka-selfhost.cfg，两者互不影响。"
+    : "";
+
+  const pick = await vscode.window.showInformationMessage(
+    "waka-selfhost 还没配置服务端地址和 API Key，现在无法上报。" + legacyHint,
+    "立即配置",
+    "稍后"
+  );
+  if (pick === "立即配置") void vscode.commands.executeCommand("wakaSelfhost.setup");
 }
 
 export function deactivate(): void {

@@ -88,7 +88,13 @@ export function wakatimeHome(): string {
   return os.homedir();
 }
 
+/** 本扩展专属配置，与官方 wakatime-cli 的 ~/.wakatime.cfg 完全隔离，两个插件可共存 */
 export function configFilePath(): string {
+  return path.join(wakatimeHome(), ".waka-selfhost.cfg");
+}
+
+/** 官方插件的配置文件路径，仅用于检测提示，不会被本扩展读写 */
+export function legacyConfigPath(): string {
   return path.join(wakatimeHome(), ".wakatime.cfg");
 }
 

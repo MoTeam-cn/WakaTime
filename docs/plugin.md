@@ -12,7 +12,36 @@ code --install-extension moteam.waka-selfhost
 
 手动安装：下载 `.vsix` 后 `Extensions: Install from VSIX`。
 
+## 与官方 WakaTime 插件共存
+
+两个插件可以同时装、同时上报，互不干扰：
+
+| | 官方 vscode-wakatime | waka-selfhost |
+| --- | --- | --- |
+| 配置文件 | `~/.wakatime.cfg` | **`~/.waka-selfhost.cfg`** |
+| 上报目标 | `api.wakatime.com` | 你自建的服务端 |
+| 依赖 | 会下载 `wakatime-cli` 二进制 | 纯 JS，无外部依赖 |
+
+本扩展**只读写自己的配置文件**，不碰 `~/.wakatime.cfg`，所以官方插件无论怎么改自己的配置都不会影响这里，反之亦然。
+
+想两边都上报，就分别配好各自的地址和 Key，两者会各发各的心跳。
+
 ## 配置
+
+### 首次配置
+
+安装后如果没有配置，状态栏会显示 **$(warning) 未配置服务地址**，并弹出一次引导提示。点击状态栏或运行命令：
+
+```
+waka-selfhost: 设置服务端地址与 API Key
+```
+
+按提示填两项：
+
+1. **服务端地址** —— 必须以 `/v1` 结尾，例如 `http://192.168.1.10:8800/v1`
+2. **API Key** —— 在服务端「设置」页面生成，`waka_` 开头
+
+没配置之前不会发任何心跳，避免无效请求。
 
 ### 方式一：命令面板（推荐）
 
@@ -22,11 +51,11 @@ code --install-extension moteam.waka-selfhost
 | `waka-selfhost: 设置 API Key` | 写入 `api_key` |
 | `waka-selfhost: 设置代理` | 写入 `proxy` |
 
-这些命令直接改 `~/.wakatime.cfg`，与官方 CLI 共用同一份文件。
+这些命令直接改 `~/.waka-selfhost.cfg`，与官方 CLI 共用同一份文件。
 
 ### 方式二：编辑配置文件
 
-`~/.wakatime.cfg`（Windows 是 `C:\Users\你的用户名\.wakatime.cfg`）：
+`~/.waka-selfhost.cfg`（Windows 是 `C:\Users\你的用户名\.wakatime.cfg`）：
 
 ```ini
 [settings]
@@ -60,7 +89,7 @@ debug = false
 
 ### 优先级
 
-默认值 → `import_cfg` → `~/.wakatime.cfg` → VS Code 设置。后面的覆盖前面的。
+默认值 → `import_cfg` → `~/.waka-selfhost.cfg` → VS Code 设置。后面的覆盖前面的。
 
 ## 全部配置项（cfg 文件）
 
@@ -105,13 +134,14 @@ debug = false
 
 | 命令 | 作用 |
 | --- | --- |
-| `设置 API URL` / `设置 API Key` / `设置代理` | 写配置 |
+| `设置服务端地址与 API Key` | 一步完成必要配置（推荐） |
+| `设置 API URL` / `设置 API Key` / `设置代理` | 单独改某一项 |
 | `切换调试模式` | 开关 debug |
 | `暂停 / 恢复统计` | 临时停止上报 |
 | `开关状态栏` | 显示或隐藏 |
 | `状态栏显示当前项目` | 状态栏追加项目名 |
 | `打开看板` | 浏览器打开服务端 |
-| `打开配置文件` | 编辑 `~/.wakatime.cfg` |
+| `打开配置文件` | 编辑 `~/.waka-selfhost.cfg` |
 | `打开日志文件` | 看日志 |
 | `诊断` | 输出生效配置 + `/healthz` 与 `/users/current` 连通性检查 |
 | `立即扫描 AI 会话日志` | 手动触发 transcript 扫描 |
@@ -144,6 +174,19 @@ debug = false
 - 状态栏会显示 `$(remote)` 前缀提醒
 
 ## 排障
+
+### 状态栏提示对照
+
+| 状态栏 | 含义 | 怎么办 |
+| --- | --- | --- |
+| `未配置服务地址` | 还没填 `api_url` | 运行「设置服务端地址与 API Key」 |
+| `未配置 API Key` | 地址有了但没 Key | 同上 |
+| `API Key 无效` | 服务端返回 401/403 | Key 复制不完整，或已被吊销 |
+| `地址不对` | 服务端返回 404 | 地址漏了 `/v1`，或端口写错 |
+| `连不上服务器` | 网络层失败 | 服务端没启动、端口没放行、地址不可达 |
+| `服务端错误 5xx` | 服务端内部报错 | 看服务端日志 |
+
+把鼠标悬停在状态栏上能看到具体错误和请求地址。
 
 1. 命令面板运行 **waka-selfhost: 诊断**，看配置与连通性
 2. 状态栏显示「未配置 API Key」→ 执行设置命令

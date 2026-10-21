@@ -2,7 +2,7 @@
   "name": "waka-selfhost",
   "displayName": "waka-selfhost",
   "description": "把编码活动上报到自建的 WakaTime 兼容服务端，不依赖 wakatime-cli",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "publisher": "moteam",
   "license": "Apache-2.0",
   "icon": "icon.png",
@@ -28,6 +28,11 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "wakaSelfhost.setup",
+        "title": "设置服务端地址与 API Key",
+        "category": "waka-selfhost"
+      },
       {
         "command": "wakaSelfhost.apikey",
         "title": "设置 API Key",

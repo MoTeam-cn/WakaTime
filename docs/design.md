@@ -459,12 +459,14 @@ if output.length == 1 && input.length == 1: output[0].duration = 0
 | M5 VS Code 插件 | 完成（未实机装） | 7 个文件：配置、项目识别、语言映射、离线队列、发送器、状态栏、主入口 |
 | M6 CI / GHCR / Action / Docker | 完成（未在 CI 跑过） | `ci.yml`、`release.yml`、`stats-card.yml`、`Dockerfile`、`compose.yaml` |
 
-本地验证结果：
+本地与 CI 验证结果（2026-10-21）：
 
-- 语法检查：54 个 TS 文件全部通过 `stripTypeScriptTypes`
-- 单元断言：22 / 22
-- 端到端冒烟：32 / 32（真实 HTTP + 真实 SQLite，含越权、去重、token 旋转、页面渲染）
-- 未能验证：`tsc -b`（本机子进程被沙箱禁止）、Docker 构建（本机无 Docker）、插件实机安装
+- `tsc -b`：0 错误（含插件包，插件按 CommonJS 输出）
+- 单元测试 `node --test`：28 / 28
+- 进程内冒烟 `npm run smoke`：32 / 32（真实 HTTP + 真实 SQLite，含越权、去重、token 旋转、页面渲染）
+- 真实进程 E2E `npm run e2e`：15 / 15（spawn 编译产物 apps/server/dist/main.js，数据落盘 SQLite）
+- GitHub Actions `ci`：全绿（typecheck / test / smoke / docker build 四项）
+- 未验证：Docker 镜像实际运行（本机无 Docker，仅 CI 构建通过）、插件实机安装
 
 已知缺口：
 

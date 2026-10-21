@@ -3,7 +3,7 @@
   "displayName": "waka-selfhost",
   "description": "把编码活动上报到自建的 WakaTime 兼容服务端，不依赖 wakatime-cli",
   "version": "0.3.0",
-  "publisher": "MoTeam",
+  "publisher": "moteam",
   "license": "Apache-2.0",
   "type": "commonjs",
   "repository": {

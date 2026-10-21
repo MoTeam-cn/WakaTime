@@ -7,7 +7,7 @@ VS Code 扩展的完整说明。市场页只放摘要，细节都在这里。
 市场搜索 `waka-selfhost`，或：
 
 ```bash
-code --install-extension MoTeam.waka-selfhost
+code --install-extension moteam.waka-selfhost
 ```
 
 手动安装：下载 `.vsix` 后 `Extensions: Install from VSIX`。

@@ -415,10 +415,17 @@ test("expandRoot 展开 ~ 与通配符", () => {
   assert.deepEqual(expandRoot(home, "~/.nope"), [path.join(home, ".nope")]);
 });
 
+function clineRoot(home: string): string {
+  const provider = PROVIDERS.find((p) => p.id === "cline");
+  assert.ok(provider, "provider 表里应有 cline");
+  const roots = typeof provider.roots === "function" ? provider.roots(home) : provider.roots;
+  return roots[0];
+}
+
 test("discoverTranscripts 找到 Cline 的 ui_messages.json", () => {
   resetTmp();
   const home = TMP;
-  const clineDir = path.join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks", "t1");
+  const clineDir = path.join(clineRoot(home), "tasks", "t1");
   fs.mkdirSync(clineDir, { recursive: true });
   fs.writeFileSync(path.join(clineDir, "ui_messages.json"), "[]", "utf8");
   const found = discoverTranscripts(home);
@@ -428,7 +435,7 @@ test("discoverTranscripts 找到 Cline 的 ui_messages.json", () => {
 test("syncAllTranscripts 解析 Cline 任务文件", () => {
   resetTmp();
   const home = TMP;
-  const taskDir = path.join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks", "t2");
+  const taskDir = path.join(clineRoot(home), "tasks", "t2");
   fs.mkdirSync(taskDir, { recursive: true });
   const messages = [
     { ts: 1700000000000, type: "say", say: "tool", text: JSON.stringify({ tool: "newFileCreated", path: "/p/new.ts", content: "a\nb" }) },

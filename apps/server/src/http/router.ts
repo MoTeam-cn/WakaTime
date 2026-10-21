@@ -40,7 +40,9 @@ export class Router {
 
   match(method: string, pathname: string): { handler: Handler; params: Record<string, string> } | null {
     const parts = pathname.split("/").filter((s) => s.length > 0);
-    const upper = method.toUpperCase();
+    // HTTP 规范：HEAD 应返回与 GET 相同的头，所以复用 GET 路由
+    const raw = method.toUpperCase();
+    const upper = raw === "HEAD" ? "GET" : raw;
     for (const r of this.routes) {
       if (r.method !== upper) continue;
       if (r.segments.length !== parts.length) continue;

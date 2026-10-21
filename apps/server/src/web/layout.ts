@@ -9,7 +9,18 @@ export function esc(input: unknown): string {
     .replace(/'/g, "&#39;");
 }
 
-export const CSS = [
+/** 静态资源版本号，启动时由 main.ts 注入，用于 ?v= 防 CDN 缓存 */
+let assetVersion = "dev";
+
+export function setAssetVersion(version: string): void {
+  assetVersion = version;
+}
+
+export function cssText(): string {
+  return CSS;
+}
+
+const CSS = [
   ":root{--bg:#fff;--fg:#000;--muted:#888;--line:#e5e5e5;--hover:#f5f5f5}",
   "@media (prefers-color-scheme:dark){:root{--bg:#000;--fg:#fff;--muted:#999;--line:#222;--hover:#111}}",
   "*{box-sizing:border-box}",
@@ -94,7 +105,7 @@ export function layout(opts: LayoutOptions): string {
     "<meta charset=\"utf-8\">",
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
     "<title>" + esc(opts.title) + " · waka-selfhost</title>",
-    "<style>" + CSS + "</style>",
+    "<link rel=\"stylesheet\" href=\"/assets/app.css?v=" + encodeURIComponent(assetVersion) + "\">",
     "</head><body>",
     header,
     "<main>",

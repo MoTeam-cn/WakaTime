@@ -42,7 +42,7 @@ export function noContent(ctx: Ctx): void {
 }
 
 export function html(ctx: Ctx, status: number, markup: string, headers: Record<string, string> = {}): void {
-  send(ctx, status, markup, { "Content-Type": "text/html; charset=utf-8", ...headers });
+  send(ctx, status, markup, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", ...headers });
 }
 
 export function text(ctx: Ctx, status: number, body: string, contentType = "text/plain; charset=utf-8"): void {

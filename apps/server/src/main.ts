@@ -32,6 +32,7 @@ import {
   resetPasswordHandler,
 } from "./api/admin.ts";
 import { registerWebRoutes } from "./web/routes.ts";
+import { setAssetVersion } from "./web/layout.ts";
 import { deleteExpiredSessions } from "./store/sessions.ts";
 import { deleteAuditOlderThan } from "./store/audit.ts";
 
@@ -61,6 +62,7 @@ export function buildState(overrides: Partial<AppState> = {}): AppState {
     ...overrides,
   };
 
+  setAssetVersion(config.appVersion);
   registerRoutes(state);
   return state;
 }

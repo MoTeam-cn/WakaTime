@@ -10,7 +10,7 @@ export function healthHandler(state: AppState) {
   return async (ctx: Ctx): Promise<void> => {
     ok(ctx, {
       status: "ok",
-      version: VERSION,
+      version: state.config.appVersion,
       uptime_seconds: Math.floor((Date.now() - state.startedAt) / 1000),
     });
   };

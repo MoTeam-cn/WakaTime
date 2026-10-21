@@ -11,6 +11,7 @@ import { dayRange, todayInTz } from "../service/aggregate-service.ts";
 import { summarizeDay, summarizeRange, buildTotal, sumDuration } from "@waka/core";
 import { listDurationsByDay, listDurationsBetween, listAllDurations } from "../store/durations.ts";
 import { auditPage, adminUsersPage, loginPage, settingsPage, setupPage, statsPage, todayPage, errorPage } from "./pages.ts";
+import { cssText } from "./layout.ts";
 import type { StatsView } from "./pages.ts";
 
 function currentUser(state: AppState, ctx: Ctx): User | null {
@@ -53,6 +54,19 @@ function requireAdminPage(state: AppState, ctx: Ctx): User | null {
 
 export function registerWebRoutes(state: AppState): void {
   const r = state.router;
+
+  // 静态资源：URL 带 ?v=版本号，内容不变则一年强缓存
+  r.get("/assets/app.css", (ctx) => {
+    const { res } = ctx;
+    if (res.headersSent) return;
+    const body = Buffer.from(cssText(), "utf8");
+    res.writeHead(200, {
+      "Content-Type": "text/css; charset=utf-8",
+      "Content-Length": String(body.length),
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+    res.end(ctx.method === "HEAD" ? undefined : body);
+  });
 
   r.get("/setup", async (ctx) => {
     if (isSetupDone(state)) {

@@ -94,6 +94,19 @@ npm run e2e      # 真实进程端到端
 - 语言是分组维度之一，所以语言榜合计小于总时长（浏览器、终端这类没有语言的活动不计入语言榜）
 - 心跳按 `entity + time + project` 去重，重复上报不会算两遍
 
+## 静态资源与缓存
+
+前端不用构建工具，CSS 由服务端直出：
+
+| 路径 | 缓存策略 | 说明 |
+| --- | --- | --- |
+| `/assets/app.css?v=<版本>` | `public, max-age=31536000, immutable` | 一年强缓存，版本变了 URL 就变，CDN 不会给旧样式 |
+| 所有 HTML 页面 | `no-cache` | 每次都验证，避免 CDN 缓存住旧页面 |
+
+版本号优先级：环境变量 `APP_VERSION` → 向上查找 `name` 为 `waka-selfhost` 的 `package.json` 的 `version` → 兜底 `dev`。
+
+所以升级镜像后 URL 自动变成 `?v=新版本`，用户浏览器与 CDN 都会立刻拉新样式。
+
 ## 数据与备份
 
 全部数据在一个 SQLite 文件里。

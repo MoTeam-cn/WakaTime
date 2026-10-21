@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 export interface Config {
@@ -16,6 +17,8 @@ export interface Config {
   maxGap: number;
   trustProxy: boolean;
   sessionCookieSecure: boolean;
+  /** 版本号，用于静态资源 ?v= 与 /v1/meta 输出 */
+  appVersion: string;
 }
 
 function intEnv(name: string, fallback: number): number {
@@ -29,6 +32,23 @@ function boolEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
   if (raw === undefined) return fallback;
   return raw === "1" || raw.toLowerCase() === "true";
+}
+
+/** 版本号：优先环境变量，其次向上找 name 为 waka-selfhost 的 package.json */
+function readAppVersion(): string {
+  const fromEnv = process.env.APP_VERSION;
+  if (fromEnv && fromEnv.trim().length > 0) return fromEnv.trim();
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as { name?: string; version?: string };
+      if (pkg.name === "waka-selfhost" && pkg.version) return pkg.version;
+    } catch { /* 继续向上找 */ }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return "dev";
 }
 
 export function loadConfig(): Config {
@@ -50,6 +70,7 @@ export function loadConfig(): Config {
     maxGap: intEnv("MAX_GAP_SECONDS", 0),
     trustProxy: boolEnv("TRUST_PROXY", true),
     sessionCookieSecure: publicUrl ? publicUrl.startsWith("https://") : false,
+    appVersion: readAppVersion(),
   };
 }
 

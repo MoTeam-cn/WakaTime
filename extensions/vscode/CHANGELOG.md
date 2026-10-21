@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- publisher 改为 moteam，仓库迁到 MoTeam-cn
+- 发布改由 GitHub Actions 驱动（tag 触发）
+
+
 ## 0.3.0
 
 - AI 会话日志从 2 个工具扩到 35 个：新增 provider 表与通用 JSON 提取器

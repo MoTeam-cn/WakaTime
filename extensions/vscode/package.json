@@ -1,103 +1,187 @@
 {
   "name": "waka-selfhost",
   "displayName": "waka-selfhost",
-  "description": "为自托管 waka-selfhost 上报编码活动（不依赖 wakatime-cli）",
-  "version": "0.1.0",
-  "publisher": "waka-selfhost",
-  "private": true,
+  "description": "把编码活动上报到你自己的 WakaTime 兼容服务端（不依赖 wakatime-cli）",
+  "version": "0.2.0",
+  "publisher": "mo-cn",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mo-cn/WakaTime.git",
+    "directory": "extensions/vscode"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "wakaSelfhost.apikey",
+        "title": "设置 API Key",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.apiurl",
+        "title": "设置 API URL",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.proxy",
+        "title": "设置代理",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.debug",
+        "title": "切换调试模式",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.toggle",
+        "title": "暂停 / 恢复统计",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.statusBarEnabled",
+        "title": "开关状态栏",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.statusBarCodingActivity",
+        "title": "状态栏显示当前项目",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.openDashboard",
+        "title": "打开看板",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.configFile",
+        "title": "打开配置文件",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.logFile",
+        "title": "打开日志文件",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.diagnostics",
+        "title": "诊断",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.flushOffline",
+        "title": "补传离线心跳",
+        "category": "waka-selfhost"
+      }
+    ],
     "configuration": {
       "title": "waka-selfhost",
       "properties": {
-        "wakaSelfhost.apiUrl": {
-          "type": "string",
-          "default": "http://localhost:8800/v1",
-          "description": "服务端 API 基址（含 /v1，不带 /api）"
-        },
         "wakaSelfhost.apiKey": {
           "type": "string",
           "default": "",
-          "description": "在服务端「设置 → API Key」创建的 waka_ 开头密钥"
+          "markdownDescription": "API Key，留空则读取 `~/.wakatime.cfg` 的 `api_key`"
+        },
+        "wakaSelfhost.apiUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "服务端地址，例如 `http://192.168.1.10:8800/v1`；留空则读取 `~/.wakatime.cfg` 的 `api_url`"
         },
         "wakaSelfhost.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "是否上报"
-        },
-        "wakaSelfhost.statusBarEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "在状态栏显示今日编码时长"
+          "description": "启用统计"
         },
         "wakaSelfhost.debug": {
           "type": "boolean",
           "default": false,
           "description": "输出调试日志"
         },
+        "wakaSelfhost.proxy": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "HTTP 代理，例如 `http://127.0.0.1:10808`；也支持 `http://user:pass@host:port`"
+        },
+        "wakaSelfhost.logFile": {
+          "type": "string",
+          "default": "",
+          "description": "日志文件路径，留空写入 ~/.wakatime/waka-selfhost.log"
+        },
+        "wakaSelfhost.statusBarEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "显示状态栏"
+        },
+        "wakaSelfhost.statusBarCodingActivity": {
+          "type": "boolean",
+          "default": false,
+          "description": "状态栏显示当前项目与文件"
+        },
+        "wakaSelfhost.statusBarHideMinutes": {
+          "type": "boolean",
+          "default": false,
+          "description": "状态栏只显示小时，隐藏分钟"
+        },
+        "wakaSelfhost.heartbeatRateLimitSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "description": "心跳最小间隔（秒），0 表示不限制"
+        },
         "wakaSelfhost.exclude": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "default": [
-            "**/node_modules/**",
-            "**/.git/**",
-            "**/dist/**",
-            "**/out/**",
-            "**/*.min.js"
-          ],
-          "description": "不上报的文件 glob"
+          "default": [],
+          "markdownDescription": "排除的文件路径正则（POSIX 语法）"
         },
-        "wakaSelfhost.heartbeatIntervalSeconds": {
+        "wakaSelfhost.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "强制记录的文件路径正则，优先于 exclude"
+        },
+        "wakaSelfhost.align": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "left",
+          "description": "状态栏对齐方向"
+        },
+        "wakaSelfhost.alignPriority": {
           "type": "number",
-          "default": 120,
-          "description": "同一文件两次心跳的最小间隔（秒），默认 120 与官方一致"
+          "default": 1,
+          "description": "状态栏对齐优先级，数值越大越靠内"
         }
       }
-    },
-    "commands": [
-      {
-        "command": "wakaSelfhost.setApiKey",
-        "title": "waka-selfhost: 设置 API Key"
-      },
-      {
-        "command": "wakaSelfhost.setApiUrl",
-        "title": "waka-selfhost: 设置 API 地址"
-      },
-      {
-        "command": "wakaSelfhost.openDashboard",
-        "title": "waka-selfhost: 打开看板"
-      },
-      {
-        "command": "wakaSelfhost.toggleStatusBar",
-        "title": "waka-selfhost: 开关状态栏"
-      },
-      {
-        "command": "wakaSelfhost.toggle",
-        "title": "waka-selfhost: 暂停/恢复上报"
-      },
-      {
-        "command": "wakaSelfhost.flushOffline",
-        "title": "waka-selfhost: 立即补传离线心跳"
-      }
-    ]
+    }
   },
   "scripts": {
-    "compile": "tsc -p .",
-    "package": "vsce package"
+    "build": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0"
-  },
-  "type": "commonjs"
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.9.0"
+  }
 }

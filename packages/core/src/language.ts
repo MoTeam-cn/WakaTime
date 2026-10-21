@@ -1,9 +1,11 @@
+import { LANGUAGE_BY_KEY } from "./language-data.ts";
+
 /**
  * VS Code languageId → WakaTime 官方语言名。
- * 目的：保证语言榜与官方同名同分（ts / typescript / TypeScript 合并为一项）。
- * 来源：对齐 wakatime-cli 的 pkg/heartbeat/language_gen.go 命名习惯。
+ * languageId 与官方规范化字符串不完全一致（typescriptreact、jsonc、shellscript 等），
+ * 所以先查这张 VS Code 专表，再落到官方全量表。
  */
-const BY_ID: Record<string, string> = {
+const BY_LANGUAGE_ID: Record<string, string> = {
   typescript: "TypeScript",
   typescriptreact: "TypeScript",
   javascript: "JavaScript",
@@ -45,11 +47,9 @@ const BY_ID: Record<string, string> = {
   dart: "Dart",
   lua: "Lua",
   perl: "Perl",
-  perl6: "Perl",
   r: "R",
   julia: "Julia",
   matlab: "MATLAB",
-  octave: "MATLAB",
   elixir: "Elixir",
   erlang: "Erlang",
   haskell: "Haskell",
@@ -59,7 +59,6 @@ const BY_ID: Record<string, string> = {
   nim: "Nim",
   crystal: "Crystal",
   elm: "Elm",
-  purescript: "PureScript",
   sql: "SQL",
   mysql: "SQL",
   pgsql: "SQL",
@@ -85,7 +84,6 @@ const BY_ID: Record<string, string> = {
   ini: "INI",
   properties: "INI",
   assembly: "Assembly",
-  asm: "Assembly",
   vhdl: "VHDL",
   verilog: "Verilog",
   systemverilog: "SystemVerilog",
@@ -109,7 +107,6 @@ const BY_ID: Record<string, string> = {
   log: "Text",
   ignore: "Ignore List",
   gitignore: "Ignore List",
-  env: "Environment Variables",
   dotenv: "Environment Variables",
   http: "HTTP Request",
   restructuredtext: "reStructuredText",
@@ -122,12 +119,12 @@ const BY_ID: Record<string, string> = {
   pug: "Pug",
   haml: "Haml",
   slim: "Slim",
-  njk: "Nunjucks",
+  nunjucks: "Nunjucks",
   liquid: "Liquid",
 };
 
 /** 扩展名兜底（languageId 缺失时用） */
-const BY_EXT: Record<string, string> = {
+const BY_EXTENSION: Record<string, string> = {
   ts: "TypeScript", tsx: "TypeScript", mts: "TypeScript", cts: "TypeScript",
   js: "JavaScript", jsx: "JavaScript", mjs: "JavaScript", cjs: "JavaScript",
   vue: "Vue.js", svelte: "Svelte", astro: "Astro",
@@ -144,60 +141,63 @@ const BY_EXT: Record<string, string> = {
   md: "Markdown", markdown: "Markdown", mdx: "Markdown", rst: "reStructuredText",
   sql: "SQL", sh: "Bash", bash: "Bash", zsh: "Zsh", fish: "Fish",
   ps1: "PowerShell", psm1: "PowerShell", bat: "Batch", cmd: "Batch",
-  dockerfile: "Docker", tf: "Terraform", hcl: "HCL", nix: "Nix",
-  cmake: "CMake", mk: "Makefile", graphql: "GraphQL", gql: "GraphQL",
+  tf: "Terraform", hcl: "HCL", nix: "Nix",
+  cmake: "CMake", graphql: "GraphQL", gql: "GraphQL",
   proto: "Protocol Buffer", ini: "INI", cfg: "INI", env: "Environment Variables",
   asm: "Assembly", s: "Assembly", vhd: "VHDL", v: "Verilog", sv: "SystemVerilog",
   sol: "Solidity", f90: "Fortran", cob: "COBOL", adb: "Ada", pas: "Pascal",
   tex: "TeX", txt: "Text", log: "Text",
 };
 
+const OFFICIAL_BY_LOWER = new Map<string, string>();
+for (const name of new Set(Object.values(LANGUAGE_BY_KEY))) {
+  OFFICIAL_BY_LOWER.set(name.toLowerCase(), name);
+}
+
 /**
- * 语言归一：接受 languageId、扩展名或已是官方名，统一返回官方名。
+ * 语言归一。优先级：VS Code languageId → 扩展名 → 官方全量表 → 已是官方名 → 原样保留。
  * 未识别返回 null（该心跳不计入语言榜）。
  */
 export function normalizeLanguage(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const v = raw.trim();
   if (v.length === 0) return null;
-
   const lower = v.toLowerCase();
-  const byId = BY_ID[lower];
+
+  const byId = BY_LANGUAGE_ID[lower];
   if (byId) return byId;
 
-  // languageId 缺失时客户端可能直接传扩展名（ts / js / py）
-  const byExtDirect = BY_EXT[lower];
-  if (byExtDirect) return byExtDirect;
+  const byExt = BY_EXTENSION[lower];
+  if (byExt) return byExt;
 
-  // 传入的是文件名或路径
-  if (lower.includes("/") || lower.includes(".")) {
-    const base = lower.split("/").pop() ?? lower;
+  const byOfficial = LANGUAGE_BY_KEY[lower];
+  if (byOfficial) return byOfficial;
+
+  // 传入的是路径或文件名
+  if (lower.includes("/") || lower.includes("\\") || lower.includes(".")) {
+    const base = lower.split(/[\\/]/).pop() ?? lower;
     if (base === "dockerfile") return "Docker";
     if (base === "makefile") return "Makefile";
     const dot = base.lastIndexOf(".");
     if (dot >= 0) {
       const ext = base.slice(dot + 1);
-      const byExt = BY_EXT[ext];
-      if (byExt) return byExt;
+      const hit = BY_EXTENSION[ext] ?? LANGUAGE_BY_KEY[ext];
+      if (hit) return hit;
     }
   }
 
-  // 已经是官方名（大小写不敏感匹配）
-  for (const name of Object.values(BY_ID)) {
-    if (name.toLowerCase() === lower) return name;
-  }
-  for (const name of Object.values(BY_EXT)) {
-    if (name.toLowerCase() === lower) return name;
-  }
+  const alreadyOfficial = OFFICIAL_BY_LOWER.get(lower);
+  if (alreadyOfficial) return alreadyOfficial;
 
-  // 形如 TypeScript 的自定义名：原样保留，避免丢失信息
-  if (/^[A-Za-z0-9+#.\- ]{1,40}$/.test(v)) {
-    return v;
-  }
+  if (/^[A-Za-z0-9+#.\- ]{1,40}$/.test(v)) return v;
   return null;
 }
 
 export function languageFromPath(filePath: string): string | null {
   return normalizeLanguage(filePath);
+}
+
+export function officialLanguageCount(): number {
+  return OFFICIAL_BY_LOWER.size;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "waka-selfhost",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted WakaTime alternative: Node native + TypeScript",
@@ -14,13 +14,15 @@
   ],
   "scripts": {
     "typecheck": "tsc -b",
-    "test": "node --test --experimental-strip-types packages/core/test/aggregate.test.ts packages/core/test/format.test.ts packages/core/test/summary.test.ts packages/core/test/language.test.ts apps/server/test/auth.test.ts",
+    "test": "tsc -b && node --test --experimental-strip-types packages/core/test/aggregate.test.ts packages/core/test/format.test.ts packages/core/test/summary.test.ts packages/core/test/language.test.ts apps/server/test/auth.test.ts extensions/vscode/test/plugin.test.mts",
     "smoke": "node --experimental-strip-types scripts/smoke.ts",
     "compare": "node --experimental-strip-types scripts/compare.ts",
     "build": "tsc -b",
     "start": "node apps/server/dist/main.js",
     "dev": "node --experimental-strip-types apps/server/src/main.ts",
-    "e2e": "node --experimental-strip-types scripts/e2e.ts"
+    "e2e": "node --experimental-strip-types scripts/e2e.ts",
+    "gen:languages": "node --experimental-strip-types scripts/gen-languages.ts",
+    "plugin:build": "tsc -b extensions/vscode"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

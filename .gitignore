@@ -8,3 +8,5 @@ data/
 *.log
 .DS_Store
 coverage/
+.tmp-plugin-test/
+.tmp-*/

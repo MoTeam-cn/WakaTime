@@ -15,6 +15,10 @@ export interface QueuedHeartbeat {
   is_write: boolean;
   project_root_count: number | null;
   machine_name_id: string;
+  dependencies?: string[];
+  ai_line_changes?: number;
+  human_line_changes?: number;
+  ai_session?: string | null;
 }
 
 /** 离线队列：失败的心跳追加到本地 JSONL，网络恢复后按序补传 */
@@ -25,6 +29,10 @@ export class OfflineQueue {
   constructor(storageDir: string) {
     fs.mkdirSync(storageDir, { recursive: true });
     this.file = path.join(storageDir, "queue.jsonl");
+  }
+
+  get path(): string {
+    return this.file;
   }
 
   append(item: QueuedHeartbeat): void {

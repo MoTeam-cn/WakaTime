@@ -473,3 +473,58 @@ if output.length == 1 && input.length == 1: output[0].duration = 0
 1. `apps/server/src/api/read.ts` 的 `stats` 未实现 `is_including_today` 参数（当前固定含今天）。
 2. 插件未实现 AI 字段采集（`ai_line_changes` 等），服务端已支持存储与透传。
 3. `scripts/stats-card.ts` 未在真实 Action 中跑过。
+
+## 16. 插件对齐（v0.2.0）
+
+目标：VS Code 插件功能面对齐官方 `vscode-wakatime` v30.2.1 + `wakatime-cli`，但**不下载也不调用 CLI**，全部用 TypeScript 重写。
+
+### 16.1 语言表
+
+`scripts/gen-languages.ts` 从 `wakatime-cli` 的 `language_generated.go`（`stringToLanguage` + `languageToString`）与 `language.go`（`languageXxxStr` 显示名）抓取生成 `language-data.ts`，当前 **1023 条映射 / 793 个官方语言名**。生成物同时写入 `packages/core/src/` 与 `extensions/vscode/src/`，提交进仓库，运行时不联网。
+
+归一优先级：VS Code languageId 专表 → 扩展名表 → 官方全量表 → 已是官方名 → 原样保留。
+
+### 16.2 配置
+
+`config-schema.ts` 实现官方 34 个 `~/.wakatime.cfg` 配置项的 INI 解析与类型转换；`cfg.ts` 在其上叠加 VS Code 设置（settings 优先）。生效顺序：默认值 → `import_cfg` → `~/.wakatime.cfg` → VS Code 设置。命令改配置会写回 cfg，保留注释与其他键。
+
+### 16.3 心跳采集
+
+事件源从 4 个补到 10 个：文本变更、选区变化、可见区域变化、切换编辑器、可见编辑器变化、窗口焦点、保存、笔记本变更、笔记本保存、终端打开/切换。
+
+心跳字段补 `dependencies`、`ai_line_changes`、`human_line_changes`。发送改走 30 秒 / 25 条缓冲（对齐官方 `SEND_BUFFER_SECONDS = 30`）。
+
+### 16.4 项目与依赖
+
+项目识别不依赖 git 二进制：读 `.git/HEAD` 与 `packed-refs`，识别 `.wakatime-project`、`.git` 文件形态的 submodule。支持多根工作区（`stopAtWorkspaceRoot`）、`hide_project_names`（生成并复用 `anon-` 前缀随机名写入 `.wakatime-project`）、`hide_project_folder`（只发相对路径）、`include_only_with_project_file`、`exclude_unknown_project`。
+
+依赖检测覆盖 16 种包清单：`package.json`、`composer.json`、`vcpkg.json`、`go.mod`、`requirements.txt`、`requirements-dev.txt`、`Pipfile`、`pyproject.toml`、`Cargo.toml`、`pom.xml`、`build.gradle(.kts)`、`Gemfile`、`pubspec.yaml`、`mix.exs`、`CMakeLists.txt`、`*.csproj/*.fsproj/*.vbproj`，上限 100 条。
+
+### 16.5 过滤与隐私
+
+`exclude` / `include` 用真正的 POSIX 正则（非法模式退化为子串匹配），`include` 优先于 `exclude`。`hide_file_names`、`hide_project_names`、`hide_branch_names`、`hide_dependencies` 均支持 `true` 或模式列表，隐藏时用 sha256 前 8 位占位。
+
+### 16.6 状态栏
+
+五种模式：基础时长、`status_bar_coding_activity`（当前项目与文件）、`status_bar_show_categories`（分类时长，`status_bar_max_categories` 限条数）、`status_bar_hide_minutes`（只显示小时）、错误态（未配置 / 连接失败 / 离线）。支持 `align` 与 `alignPriority`。
+
+### 16.7 AI 采集
+
+检测 10 类 AI 扩展（Copilot、Cursor、Codeium、Cody、Continue、Supermaven、Tabnine、AI Toolkit 等）。行变更用启发式判定：单次新增 ≥30 行且与上次突发间隔 <1.5 秒记为 AI 生成，否则记为人工；结果写入 `ai_line_changes` / `human_line_changes`。
+
+### 16.8 远程开发
+
+插件声明 `extensionKind: ["workspace"]`，Remote-SSH / WSL / Dev Container 下跑在远端工作区，读远端文件与仓库。`machine_name_id` 由 `hostname + remoteName + platform` 哈希得到，远端与本地不同机。状态栏加 `$(remote)` 前缀提示，日志写明「请求将从远端机器发出，服务端地址需远端可达」。
+
+### 16.9 代理与诊断
+
+`proxy` 支持 `http://` / `https://`（含 `user:pass@`），用 CONNECT 隧道实现，无需第三方库；SOCKS 与 NTLM 未实现（配置后抛明确错误）。
+
+诊断命令输出：配置文件路径、脱敏 apiKey、节流与超时、状态栏开关、离线队列条数、代理、过滤规则、隐私开关、AI 扩展、日志路径、VS Code 与远程环境，并做 `/healthz` 与 `/users/current` 双连通性检查。
+
+### 16.10 验证
+
+- 插件 16 个源文件 `tsc` 0 错误
+- 插件单测 18 项全过（INI 解析与合并、正则过滤、隐私开关、16 种清单依赖解析、项目/分支识别、匿名项目名稳定性、心跳缓冲、语言归一）
+- 未验证：真机安装（需手动 `vsce package` 后装入 VS Code）
+

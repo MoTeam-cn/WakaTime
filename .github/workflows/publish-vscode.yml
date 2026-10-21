@@ -83,8 +83,19 @@ jobs:
             echo "::error::缺少 VSCE_PAT secret，请在仓库 Settings → Secrets and variables → Actions 里添加"
             exit 1
           fi
-          npx --yes @vscode/vsce publish --no-dependencies \
-            --packagePath "../../waka-selfhost-${{ steps.ver.outputs.version }}.vsix"
+          set +e
+          OUTPUT=$(npx --yes @vscode/vsce publish --no-dependencies \
+            --packagePath "../../waka-selfhost-${{ steps.ver.outputs.version }}.vsix" 2>&1)
+          CODE=$?
+          set -e
+          echo "$OUTPUT"
+          if [ $CODE -ne 0 ]; then
+            if echo "$OUTPUT" | grep -qi "already exists"; then
+              echo "::warning::版本 ${{ steps.ver.outputs.version }} 已经发布过，跳过"
+            else
+              exit $CODE
+            fi
+          fi
 
       - name: Upload vsix artifact
         if: ${{ inputs.dry_run == true }}

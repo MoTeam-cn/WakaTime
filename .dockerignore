@@ -4,5 +4,4 @@ data
 .git
 *.log
 *.db
-extensions
 .github

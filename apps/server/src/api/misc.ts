@@ -45,7 +45,7 @@ export function metaHandler(state: AppState) {
   return async (ctx: Ctx): Promise<void> => {
     ok(ctx, {
       hostname: os.hostname(),
-      version: VERSION,
+      version: state.config.appVersion,
       server_time: new Date().toISOString(),
       timezone: state.config.defaultTimezone,
     });

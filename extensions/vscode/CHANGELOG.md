@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- `/v1/meta` 返回真实版本号
+
+
 ## 0.3.3
 
 - 服务端：CSS 改为 `/assets/app.css?v=版本` 外链，一年强缓存；HTML 加 `no-cache`

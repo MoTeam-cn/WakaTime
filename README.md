@@ -88,7 +88,17 @@ npx vsce package
 docker compose up -d
 ```
 
-镜像发布到 GHCR（不推 Docker Hub）：打 tag v0.1.0 后由 release.yml 构建 linux/amd64 与 linux/arm64。
+镜像发布到 GHCR（不推 Docker Hub），打 tag 后由 release.yml 构建 linux/amd64 与 linux/arm64：
+
+```
+docker pull ghcr.io/mo-cn/wakatime:latest
+```
+
+仓库是私有的，拉取前先登录（用带 read:packages 的 PAT）：
+
+```
+docker login ghcr.io -u Mo-cn
+```
 
 ## 统计口径
 

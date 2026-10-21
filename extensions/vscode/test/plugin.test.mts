@@ -337,3 +337,114 @@ test("transcript 目录不存在时返回空", () => {
   assert.equal(result.filesTouched, 0);
   assert.deepEqual(claudeTranscriptPaths(AI_HOME), []);
 });
+
+// ---------- 通用提取器 ----------
+import { extractEvents, dedupeEvents, toEpochSeconds, countLines } from "../dist/ai-parse.js";
+import { discoverTranscripts, expandRoot, PROVIDERS, SQLITE_ONLY_PROVIDERS } from "../dist/ai-providers.js";
+
+test("toEpochSeconds 支持秒、毫秒、ISO 字符串", () => {
+  assert.equal(toEpochSeconds(1700000000), 1700000000);
+  assert.equal(toEpochSeconds(1700000000000), 1700000000);
+  assert.equal(toEpochSeconds("2026-10-21T10:00:00.000Z"), Date.parse("2026-10-21T10:00:00.000Z") / 1000);
+  assert.equal(toEpochSeconds("abc"), null);
+  assert.equal(toEpochSeconds(null), null);
+});
+
+test("countLines 处理尾换行", () => {
+  assert.equal(countLines("a"), 1);
+  assert.equal(countLines("a\nb"), 2);
+  assert.equal(countLines("a\nb\n"), 2);
+  assert.equal(countLines(""), 0);
+});
+
+test("extractEvents 绝对路径 + content", () => {
+  const events = extractEvents({ timestamp: 1700000000, file_path: "/p/a.ts", content: "a\nb\nc" });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].entity, "/p/a.ts");
+  assert.equal(events[0].lineChanges, 3);
+  assert.equal(events[0].time, 1700000000);
+});
+
+test("extractEvents 相对路径按 cwd 补全", () => {
+  const events = extractEvents({ cwd: "/Users/x/proj", timestamp: 1700000000, path: "src/b.ts", new_string: "x\ny" });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].entity, path.join("/Users/x/proj", "src/b.ts"));
+  assert.equal(events[0].project, "proj");
+});
+
+test("extractEvents 展开嵌套 JSON 字符串（Cline 风格）", () => {
+  const inner = JSON.stringify({ tool: "editedExistingFile", path: "/p/c.ts", diff: "@@ -1 +1 @@\n-a\n+b\n+c" });
+  const events = extractEvents({ ts: 1700000000000, type: "say", say: "tool", text: inner });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].entity, "/p/c.ts");
+  assert.equal(events[0].lineChanges, 1);
+});
+
+test("extractEvents old/new 差值", () => {
+  const events = extractEvents({ timestamp: 1700000000, filePath: "/p/d.ts", old_string: "a\nb", new_string: "a\nb\nc\nd" });
+  assert.equal(events[0].lineChanges, 2);
+});
+
+test("extractEvents 缺时间戳不生成", () => {
+  assert.equal(extractEvents({ file_path: "/p/a.ts", content: "x" }).length, 0);
+});
+
+test("extractEvents 跳过 URL 与多行路径", () => {
+  assert.equal(extractEvents({ timestamp: 1700000000, file_path: "https://x.com/a.ts", content: "x" }).length, 0);
+  assert.equal(extractEvents({ timestamp: 1700000000, file_path: "a\nb.ts", content: "x" }).length, 0);
+});
+
+test("dedupeEvents 同文件同秒取最大行数", () => {
+  const events = dedupeEvents([
+    { entity: "/p/a.ts", time: 100.1, lineChanges: 3, isWrite: true, project: null },
+    { entity: "/p/a.ts", time: 100.9, lineChanges: 7, isWrite: true, project: null },
+    { entity: "/p/b.ts", time: 100.5, lineChanges: 1, isWrite: true, project: null },
+  ]);
+  assert.equal(events.length, 2);
+  assert.equal(events.find((e) => e.entity === "/p/a.ts")?.lineChanges, 7);
+});
+
+test("expandRoot 展开 ~ 与通配符", () => {
+  resetTmp();
+  const home = TMP;
+  fs.mkdirSync(path.join(home, ".gemini", "tmp", "abc123"), { recursive: true });
+  fs.mkdirSync(path.join(home, ".gemini", "tmp", "def456"), { recursive: true });
+  const expanded = expandRoot(home, "~/.gemini/tmp/*");
+  assert.equal(expanded.length, 2);
+  assert.ok(expanded.every((p) => p.includes(".gemini")));
+  assert.deepEqual(expandRoot(home, "~/.nope"), [path.join(home, ".nope")]);
+});
+
+test("discoverTranscripts 找到 Cline 的 ui_messages.json", () => {
+  resetTmp();
+  const home = TMP;
+  const clineDir = path.join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks", "t1");
+  fs.mkdirSync(clineDir, { recursive: true });
+  fs.writeFileSync(path.join(clineDir, "ui_messages.json"), "[]", "utf8");
+  const found = discoverTranscripts(home);
+  assert.ok(found.some((f) => f.provider.id === "cline" && f.file.endsWith("ui_messages.json")));
+});
+
+test("syncAllTranscripts 解析 Cline 任务文件", () => {
+  resetTmp();
+  const home = TMP;
+  const taskDir = path.join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "tasks", "t2");
+  fs.mkdirSync(taskDir, { recursive: true });
+  const messages = [
+    { ts: 1700000000000, type: "say", say: "tool", text: JSON.stringify({ tool: "newFileCreated", path: "/p/new.ts", content: "a\nb" }) },
+  ];
+  fs.writeFileSync(path.join(taskDir, "ui_messages.json"), JSON.stringify(messages), "utf8");
+  const result = syncAllTranscripts({}, { home });
+  assert.equal(result.heartbeats.length, 1);
+  assert.equal(result.heartbeats[0].tool, "Cline");
+  assert.equal(result.heartbeats[0].entity, "/p/new.ts");
+  assert.equal(result.heartbeats[0].lineChanges, 2);
+});
+
+test("provider 表覆盖 50+ 工具", () => {
+  const total = PROVIDERS.length + SQLITE_ONLY_PROVIDERS.length;
+  assert.ok(total >= 50, "工具总数应不少于 50，实际 " + total);
+  assert.ok(PROVIDERS.some((p) => p.id === "claude"));
+  assert.ok(PROVIDERS.some((p) => p.id === "codex"));
+  assert.ok(SQLITE_ONLY_PROVIDERS.some((p) => p.id === "cursor"));
+});

@@ -524,21 +524,32 @@ if output.length == 1 && input.length == 1: output[0].duration = 0
 
 ### 16.11 AI 会话日志（transcript）
 
-`ai-transcript.ts` 直接读 AI 工具的会话日志，把里面的文件编辑补发成带 `ai_line_changes` 的心跳。不调用任何 AI 工具的命令行，只做只读解析。
+`ai-transcript.ts` + `ai-providers.ts` + `ai-parse.ts` 三个模块配合：provider 表声明 51 个工具的位置与格式，解析器按格式分派，只读不写。
 
-已支持：
+**已实现 35 个工具**：
 
-- **Claude Code**：`~/.claude/projects/**/*.jsonl`。逐行取 `toolUseResult`，文件路径取 `filePath` 或 `file.filePath`；写判定与官方一致（有 `structuredPatch`、`type` 为 create/update/delete、有 `newString`/`oldString` 视为写；`originalFile` 非空视为读，跳过）；行变更 = `sum(newLines - oldLines)`，无 patch 时用 `newString` 行数减 `oldString` 行数；`/tmp/claude-<uid>/…/tasks/*.output` 这类 sub-agent 产物跳过。项目名取 `cwd` 的末段，时间用日志里的 `timestamp`。
-- **Codex**：`~/.codex/sessions/**/*.jsonl`。从 `apply_patch` 的 `*** Update File:` / `*** Add File:` / `*** Delete File:` 段提取文件，`+`/`-` 行数差作为变更量，相对路径按 `cwd` 补全。
+| 工具 | 解析方式 |
+| --- | --- |
+| Claude、OpenClaude、CodeBuddy、Qwen Code、CodeWhale、DeepSeek | Claude 系 JSONL，专用解析 |
+| Codex、Droid | Codex 系 JSONL，`apply_patch` 专用解析 |
+| Cline、Roo Code、Kilo Code、Cline CLI | `ui_messages.json`，嵌套 JSON 展开 |
+| Gemini | `~/.gemini/tmp/*/`，嵌套 JSON 展开 |
+| Amp、Codebuff、Continue、Copilot CLI、Crush、Devin、Grok Build、IBM Bob、Kimi、Kimi Code、Kiro、LingTai TUI、Mistral Vibe、Mux、OMP、Open Design、OpenClaw、Pi、Quick Desktop、Zerostack、Cursor Agent、Forge | 通用提取器（路径 + 写入内容 + 时间戳启发式） |
+
+**读 SQLite、本实现不支持 16 个**：Cursor、Copilot、Windsurf、Cody、Goose、OpenCode、Qoder、Warp、Zed、ZCode、Hermes、Cursor Agent DB、Antigravity、Kiro DB、OpenCode v2、Gemini (Antigravity)。原因是 VS Code 扩展宿主没有 sqlite 驱动，硬做要引入原生模块，与「零依赖」冲突。
+
+解析策略分三层：
+
+1. **专用解析**：Claude 系（`toolUseResult`）与 Codex 系（`apply_patch`），规则与官方一致，误报最低
+2. **通用提取器**：递归遍历 JSON，命中「路径字段 + 写入字段 + 时间戳」三元组即产事件；自动展开嵌套的 JSON 字符串（Cline 把工具调用塞在 `text` 里），diff 按 `+`/`-` 计数，`old/new` 按行数差
+3. **降噪**：路径必须是绝对路径或能拼上 `cwd`；排除 URL、多行字符串、无时间戳的记录；同文件同秒只留最大行数
 
 机制：
 
-- 增量读取：按文件记录已消费字节偏移，存在 `globalState`，只解析新增的完整行，末行不完整则留在下次
+- JSONL 按字节偏移增量读取；整文件 JSON 按 `size + mtime` 判断变化，用上次最大时间戳做二次过滤
 - 每 60 秒同步一次，也可用命令「立即扫描 AI 会话日志」手动触发
-- `sync_ai_disabled = true` 整体关闭；`exclude_ai` 按正则跳过指定路径
-- 补发的心跳不受 120 秒节流限制（它们是历史事件），但同样经过项目识别、隐私与过滤逻辑
-
-未支持（官方有 60+ 种）：Cursor、Copilot、Windsurf、Cline、Roo、Continue、Amp、Gemini CLI、Qwen Code、Kimi、DeepSeek 等。加新工具只需在 `ai-transcript.ts` 里补一个 `syncXxx` 函数。
+- `sync_ai_disabled = true` 整体关闭；`exclude_ai` 按正则跳过路径
+- 补发的心跳不受 120 秒节流限制，但同样经过项目识别、隐私与过滤逻辑
 
 ### 16.10 验证
 

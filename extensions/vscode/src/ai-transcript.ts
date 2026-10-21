@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { discoverTranscripts, PROVIDERS, SQLITE_ONLY_PROVIDERS } from "./ai-providers.ts";
+import { extractEvents, dedupeEvents } from "./ai-parse.ts";
 
 /** 从 AI 工具会话日志里解析出的编码活动 */
 export interface TranscriptHeartbeat {
@@ -296,25 +298,111 @@ export function syncCodex(home: string, state: TranscriptState): SyncResult {
 export interface AISyncOptions {
   home?: string;
   excludePatterns?: RegExp[];
+  /** 只扫描指定 provider（调试用） */
+  onlyProviderIds?: string[];
 }
 
+/** 遍历全部 provider，按格式分派解析，返回增量心跳 */
 export function syncAllTranscripts(state: TranscriptState, options: AISyncOptions = {}): SyncResult {
   const home = options.home ?? os.homedir();
-  const claude = syncClaude(home, state);
-  const codex = syncCodex(home, state);
+  const discovered = discoverTranscripts(home);
+  const heartbeats: TranscriptHeartbeat[] = [];
+  const newState: TranscriptState = { ...state };
+  let touched = 0;
+
+  for (const { provider, file } of discovered) {
+    if (options.onlyProviderIds && !options.onlyProviderIds.includes(provider.id)) continue;
+
+    const key = provider.id + ":" + toSlash(file);
+    const isJsonl = /\.(jsonl|ndjson)$/i.test(file);
+
+    try {
+      if (isJsonl) {
+        const { lines, nextOffset } = readNewLines(file, state[key] ?? 0);
+        newState[key] = nextOffset;
+        if (lines.length === 0) continue;
+        touched++;
+
+        for (const line of lines) {
+          if (provider.kind === "claude") {
+            const hb = parseClaudeLine(line);
+            if (hb) heartbeats.push({ ...hb, tool: provider.name });
+            continue;
+          }
+          if (provider.kind === "codex") {
+            for (const hb of parseCodexLine(line)) heartbeats.push({ ...hb, tool: provider.name });
+            continue;
+          }
+          let parsed: unknown;
+          try { parsed = JSON.parse(line); } catch { continue; }
+          for (const event of dedupeEvents(extractEvents(parsed))) {
+            heartbeats.push({
+              tool: provider.name,
+              entity: event.entity,
+              time: event.time,
+              isWrite: true,
+              lineChanges: event.lineChanges,
+              project: event.project,
+              sessionId: path.basename(file),
+            });
+          }
+        }
+        continue;
+      }
+
+      // 整文件 JSON：按 size + mtime 判断是否变化，只补发新事件
+      const stat = fs.statSync(file);
+      const sizeKey = key;
+      const mtimeKey = key + ":m";
+      const timeKey = key + ":t";
+      if (state[sizeKey] === stat.size && state[mtimeKey] === Math.floor(stat.mtimeMs)) continue;
+
+      const text = fs.readFileSync(file, "utf8");
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); } catch { continue; }
+
+      const lastTime = state[timeKey] ?? 0;
+      const events = dedupeEvents(extractEvents(parsed)).filter((e) => e.time > lastTime);
+      newState[sizeKey] = stat.size;
+      newState[mtimeKey] = Math.floor(stat.mtimeMs);
+      if (events.length === 0) continue;
+
+      touched++;
+      newState[timeKey] = Math.max(...events.map((e) => e.time));
+      for (const event of events) {
+        heartbeats.push({
+          tool: provider.name,
+          entity: event.entity,
+          time: event.time,
+          isWrite: true,
+          lineChanges: event.lineChanges,
+          project: event.project,
+          sessionId: path.basename(file),
+        });
+      }
+    } catch {
+      /* 单个文件失败不影响其他 */
+    }
+  }
 
   const excludes = options.excludePatterns ?? [];
-  const heartbeats = [...claude.heartbeats, ...codex.heartbeats].filter((hb) => {
+  const filtered = heartbeats.filter((hb) => {
     const normalized = toSlash(hb.entity);
     return !excludes.some((re) => re.test(normalized));
   });
 
-  return {
-    heartbeats,
-    filesTouched: claude.filesTouched + codex.filesTouched,
-    newState: { ...claude.newState, ...codex.newState },
-  };
+  return { heartbeats: filtered, filesTouched: touched, newState };
 }
 
-/** 支持的 AI 工具（未列出的官方工具暂未实现） */
-export const SUPPORTED_AI_TOOLS = ["Claude", "Codex"] as const;
+/** 已实现的 provider 名 */
+export function supportedToolNames(): string[] {
+  return PROVIDERS.map((p) => p.name);
+}
+
+/** 读 SQLite、本实现不支持的 provider */
+export function unsupportedToolNames(): { name: string; path: string }[] {
+  return SQLITE_ONLY_PROVIDERS.map((p) => ({ name: p.name, path: p.path }));
+}
+
+/** 支持的 AI 工具数量（含 SQLite 类，见 unsupportedToolNames） */
+export const AI_TOOL_COUNT = PROVIDERS.length + SQLITE_ONLY_PROVIDERS.length;

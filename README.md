@@ -102,14 +102,19 @@ debug = false
 
 SOCKS 与 NTLM 代理未实现，配置后会在日志里给出明确错误。
 
-AI 会话日志支持的路径：
+AI 会话日志共支持 **35 个工具**（官方 60+ 里读 SQLite 的 16 个暂不支持）：
 
-```
-Claude Code   ~/.claude/projects/**/*.jsonl
-Codex         ~/.codex/sessions/**/*.jsonl
-```
+| 分组 | 工具 |
+| --- | --- |
+| Claude 系（专用解析） | Claude、OpenClaude、CodeBuddy、Qwen Code、CodeWhale、DeepSeek |
+| Codex 系（`apply_patch`） | Codex、Droid |
+| Cline 系（`ui_messages.json`） | Cline、Roo Code、Kilo Code、Cline CLI |
+| Gemini | Gemini |
+| 通用提取器 | Amp、Codebuff、Continue、Copilot CLI、Crush、Devin、Grok Build、IBM Bob、Kimi、Kimi Code、Kiro、LingTai TUI、Mistral Vibe、Mux、OMP、Open Design、OpenClaw、Pi、Quick Desktop、Zerostack、Cursor Agent、Forge |
 
-每 60 秒增量扫描一次，也可以用命令「立即扫描 AI 会话日志」手动触发。`sync_ai_disabled = true` 关闭，`exclude_ai` 按正则排除路径。Cursor、Copilot、Windsurf、Cline 等官方支持的其他工具暂未实现。
+**不支持（读 SQLite，扩展宿主没有驱动）**：Cursor、Copilot、Windsurf、Cody、Goose、OpenCode、Qoder、Warp、Zed、ZCode、Hermes、Antigravity、Kiro DB、OpenCode v2、Gemini (Antigravity)、Cursor Agent DB。
+
+每 60 秒增量扫描一次，也可以用命令「立即扫描 AI 会话日志」手动触发。`sync_ai_disabled = true` 关闭，`exclude_ai` 按正则排除路径。
 
 ## API
 

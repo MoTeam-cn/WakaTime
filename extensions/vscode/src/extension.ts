@@ -18,9 +18,12 @@ import type { StatusContext } from "./statusbar.ts";
 import { LineChangeTracker, detectAIExtensions } from "./ai.ts";
 import { initLogFile, write as writeLog, currentLogPath } from "./logfile.ts";
 import { showDiagnostics } from "./diagnostics.ts";
+import { syncAllTranscripts } from "./ai-transcript.ts";
+import type { TranscriptHeartbeat, TranscriptState } from "./ai-transcript.ts";
 
 const DEBOUNCE_MS = 50;
 const OFFLINE_FLUSH_MS = 5 * 60_000;
+const AI_SYNC_MS = 60_000;
 
 let output: vscode.OutputChannel;
 let statusBar: StatusBar;
@@ -35,6 +38,8 @@ let lastAIGenerating = false;
 let lastContext: StatusContext = { project: null, file: null, remote: false };
 let debounceId: ReturnType<typeof setTimeout> | null = null;
 let offlineTimer: ReturnType<typeof setInterval> | null = null;
+let aiTimer: ReturnType<typeof setInterval> | null = null;
+let transcriptState: TranscriptState = {};
 let paused = false;
 let ctx: vscode.ExtensionContext;
 
@@ -87,7 +92,8 @@ function buildHeartbeat(
   isWrite: boolean,
   category: string,
   entityType: string,
-  workspaceRoot: string | null
+  workspaceRoot: string | null,
+  transcript?: { time: number; lineChanges: number }
 ): QueuedHeartbeat | null {
   const config = cfg();
   if (!config.enabled || paused) return null;
@@ -108,7 +114,7 @@ function buildHeartbeat(
   const branch = shouldHideBranch(info.branch, config) && info.branch ? "hidden-" + hashName(info.branch) : info.branch;
 
   const dependencies = shouldHideDependencies(config) ? [] : detectDependencies(info.rootDir);
-  const changes = lineTracker.take(entityPath);
+  const changes = transcript ? { aiLineChanges: 0, humanLineChanges: 0 } : lineTracker.take(entityPath);
 
   const heartbeat: QueuedHeartbeat = {
     entity,
@@ -126,8 +132,13 @@ function buildHeartbeat(
     machine_name_id: machineId,
   };
 
+  if (transcript) {
+    heartbeat.time = transcript.time;
+    if (transcript.lineChanges > 0) heartbeat.ai_line_changes = transcript.lineChanges;
+  }
+
   if (dependencies.length > 0) heartbeat.dependencies = dependencies;
-  if (changes.aiLineChanges > 0) heartbeat.ai_line_changes = changes.aiLineChanges;
+  if (!transcript && changes.aiLineChanges > 0) heartbeat.ai_line_changes = changes.aiLineChanges;
   if (changes.humanLineChanges > 0) heartbeat.human_line_changes = changes.humanLineChanges;
 
   lastContext = {
@@ -199,6 +210,65 @@ function schedule(isWrite: boolean): void {
     debounceId = null;
     emitFromEditor(vscode.window.activeTextEditor, isWrite);
   }, DEBOUNCE_MS);
+}
+
+const TRANSCRIPT_STATE_KEY = "wakaSelfhost.transcriptState";
+
+/** 把 AI 会话日志解析出的活动补发成心跳（不受 120s 节流限制，它们是历史事件） */
+function emitTranscript(heartbeats: TranscriptHeartbeat[]): void {
+  const config = cfg();
+  if (config.syncAiDisabled) return;
+  if (!config.apiKey) return;
+
+  const excludes: RegExp[] = [];
+  for (const pattern of config.excludeAi) {
+    try {
+      excludes.push(new RegExp(pattern));
+    } catch {
+      /* 非法模式忽略 */
+    }
+  }
+
+  let emitted = 0;
+  for (const item of heartbeats) {
+    const normalized = item.entity.replace(/\\/g, "/");
+    if (excludes.some((re) => re.test(normalized))) continue;
+
+    const heartbeat = buildHeartbeat(
+      item.entity,
+      null,
+      null,
+      null,
+      null,
+      item.isWrite,
+      "coding",
+      "file",
+      workspaceRootFor(item.entity),
+      { time: item.time, lineChanges: item.lineChanges }
+    );
+    if (!heartbeat) continue;
+    if (!heartbeat.project && item.project) heartbeat.project = item.project;
+    buffer.push(heartbeat);
+    emitted++;
+  }
+  if (emitted > 0) log("AI 会话补发 " + emitted + " 条心跳");
+}
+
+async function syncTranscripts(): Promise<void> {
+  const config = cfg();
+  if (config.syncAiDisabled || !config.enabled) return;
+
+  try {
+    const result = syncAllTranscripts(transcriptState, { home: os.homedir() });
+    transcriptState = { ...transcriptState, ...result.newState };
+    await ctx.globalState.update(TRANSCRIPT_STATE_KEY, transcriptState);
+    if (result.filesTouched > 0 && config.debug) {
+      log("扫描 AI 会话: " + result.filesTouched + " 个文件有更新，解析出 " + result.heartbeats.length + " 条活动");
+    }
+    if (result.heartbeats.length > 0) emitTranscript(result.heartbeats);
+  } catch (err) {
+    log("AI 会话扫描失败: " + (err instanceof Error ? err.message : String(err)));
+  }
 }
 
 function registerEvents(subscriptions: vscode.Disposable[]): void {
@@ -360,6 +430,11 @@ function registerCommands(context: vscode.ExtensionContext, subscriptions: vscod
     await showDiagnostics(cfg(), queue, sender, output);
   });
 
+  reg("wakaSelfhost.syncAI", async () => {
+    await syncTranscripts();
+    void vscode.window.showInformationMessage("已扫描 AI 会话日志");
+  });
+
   reg("wakaSelfhost.flushOffline", async () => {
     const sent = await sender.flush(cfg());
     void vscode.window.showInformationMessage("已补传 " + sent + " 条心跳");
@@ -396,6 +471,10 @@ export function activate(context: vscode.ExtensionContext): void {
   registerEvents(context.subscriptions);
   registerCommands(context, context.subscriptions);
 
+  transcriptState = context.globalState.get<TranscriptState>(TRANSCRIPT_STATE_KEY) ?? {};
+  void syncTranscripts();
+  aiTimer = setInterval(() => void syncTranscripts(), AI_SYNC_MS);
+
   offlineTimer = setInterval(() => {
     const c = cfg();
     if (!c.offline) return;
@@ -419,6 +498,7 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
   if (debounceId) clearTimeout(debounceId);
   if (offlineTimer) clearInterval(offlineTimer);
+  if (aiTimer) clearInterval(aiTimer);
   buffer?.dispose();
   statusBar?.dispose();
 }

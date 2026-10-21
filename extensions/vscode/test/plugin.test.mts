@@ -226,3 +226,114 @@ test("normalizeLanguage 插件侧与官方表一致", () => {
   assert.equal(normalizeLanguage("Dockerfile"), "Docker");
   assert.equal(normalizeLanguage(""), null);
 });
+
+// ---------- AI 会话日志 ----------
+import { syncAllTranscripts, syncClaude, syncCodex, claudeTranscriptPaths } from "../dist/ai-transcript.js";
+
+const AI_HOME = path.join(TMP, "ai-home");
+
+function writeTranscript(rel: string, lines: object[]): string {
+  const target = path.join(AI_HOME, rel);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, lines.map((l) => JSON.stringify(l)).join("\n") + "\n", "utf8");
+  return target;
+}
+
+test("Claude：structuredPatch 写操作生成心跳", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s1.jsonl", [
+    { timestamp: "2026-10-21T10:00:00.000Z", sessionId: "s1", cwd: "/Users/x/proj", type: "user",
+      toolUseResult: { filePath: "/Users/x/proj/a.ts", structuredPatch: [{ oldLines: 2, newLines: 5 }] } },
+  ]);
+  const result = syncClaude(AI_HOME, {});
+  assert.equal(result.heartbeats.length, 1);
+  const hb = result.heartbeats[0];
+  assert.equal(hb.tool, "Claude");
+  assert.equal(hb.entity, "/Users/x/proj/a.ts");
+  assert.equal(hb.isWrite, true);
+  assert.equal(hb.lineChanges, 3);
+  assert.equal(hb.project, "proj");
+  assert.equal(hb.time, Date.parse("2026-10-21T10:00:00.000Z") / 1000);
+});
+
+test("Claude：originalFile 非空是读操作，不产生心跳", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s2.jsonl", [
+    { timestamp: "2026-10-21T10:01:00.000Z", sessionId: "s2", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/Users/x/proj/a.ts", originalFile: "line1\nline2" } },
+  ]);
+  assert.equal(syncClaude(AI_HOME, {}).heartbeats.length, 0);
+});
+
+test("Claude：newString 创建文件按行数计算", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s3.jsonl", [
+    { timestamp: "2026-10-21T10:02:00.000Z", sessionId: "s3", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/Users/x/proj/new.ts", newString: "a\nb\nc\nd" } },
+  ]);
+  const hbs = syncClaude(AI_HOME, {}).heartbeats;
+  assert.equal(hbs.length, 1);
+  assert.equal(hbs[0].lineChanges, 4);
+});
+
+test("Claude：sub-agent task output 路径被忽略", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s4.jsonl", [
+    { timestamp: "2026-10-21T10:03:00.000Z", sessionId: "s4", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/private/tmp/claude-501/-Users-x-proj/abc/tasks/t1.output", newString: "x" } },
+  ]);
+  assert.equal(syncClaude(AI_HOME, {}).heartbeats.length, 0);
+});
+
+test("Claude：增量读取，第二次不重复", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s5.jsonl", [
+    { timestamp: "2026-10-21T10:04:00.000Z", sessionId: "s5", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/Users/x/proj/a.ts", structuredPatch: [{ oldLines: 1, newLines: 2 }] } },
+  ]);
+  const first = syncClaude(AI_HOME, {});
+  assert.equal(first.heartbeats.length, 1);
+  const second = syncClaude(AI_HOME, first.newState);
+  assert.equal(second.heartbeats.length, 0);
+  assert.equal(second.filesTouched, 0);
+});
+
+test("Codex：apply_patch 解析文件与行数", () => {
+  resetTmp();
+  writeTranscript(".codex/sessions/2026/10/21/rollout-1.jsonl", [
+    { timestamp: "2026-10-21T11:00:00.000Z", type: "response_item",
+      payload: { type: "function_call", name: "apply_patch", cwd: "/Users/x/proj",
+        input: "*** Begin Patch\n*** Update File: src/b.ts\n@@\n-old\n+new1\n+new2\n*** End Patch" } },
+  ]);
+  const result = syncCodex(AI_HOME, {});
+  assert.equal(result.heartbeats.length, 1);
+  const hb = result.heartbeats[0];
+  assert.equal(hb.tool, "Codex");
+  assert.equal(hb.entity, path.join("/Users/x/proj", "src/b.ts"));
+  assert.equal(hb.lineChanges, 1);
+  assert.equal(hb.project, "proj");
+});
+
+test("syncAllTranscripts 汇总并支持 excludeAi 过滤", () => {
+  resetTmp();
+  writeTranscript(".claude/projects/-Users-x-proj/s6.jsonl", [
+    { timestamp: "2026-10-21T12:00:00.000Z", sessionId: "s6", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/Users/x/proj/keep.ts", newString: "a" } },
+    { timestamp: "2026-10-21T12:01:00.000Z", sessionId: "s6", cwd: "/Users/x/proj",
+      toolUseResult: { filePath: "/Users/x/proj/skip.ts", newString: "a" } },
+  ]);
+  const all = syncAllTranscripts({}, { home: AI_HOME });
+  assert.equal(all.heartbeats.length, 2);
+
+  const filtered = syncAllTranscripts({}, { home: AI_HOME, excludePatterns: [/skip\.ts$/] });
+  assert.equal(filtered.heartbeats.length, 1);
+  assert.ok(filtered.heartbeats[0].entity.endsWith("keep.ts"));
+});
+
+test("transcript 目录不存在时返回空", () => {
+  resetTmp();
+  const result = syncAllTranscripts({}, { home: AI_HOME });
+  assert.deepEqual(result.heartbeats, []);
+  assert.equal(result.filesTouched, 0);
+  assert.deepEqual(claudeTranscriptPaths(AI_HOME), []);
+});

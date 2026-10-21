@@ -2,7 +2,7 @@
   "name": "waka-selfhost",
   "displayName": "waka-selfhost",
   "description": "把编码活动上报到你自己的 WakaTime 兼容服务端（不依赖 wakatime-cli）",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "mo-cn",
   "license": "Apache-2.0",
   "type": "commonjs",
@@ -79,6 +79,11 @@
       {
         "command": "wakaSelfhost.diagnostics",
         "title": "诊断",
+        "category": "waka-selfhost"
+      },
+      {
+        "command": "wakaSelfhost.syncAI",
+        "title": "立即扫描 AI 会话日志",
         "category": "waka-selfhost"
       },
       {

@@ -522,9 +522,27 @@ if output.length == 1 && input.length == 1: output[0].duration = 0
 
 诊断命令输出：配置文件路径、脱敏 apiKey、节流与超时、状态栏开关、离线队列条数、代理、过滤规则、隐私开关、AI 扩展、日志路径、VS Code 与远程环境，并做 `/healthz` 与 `/users/current` 双连通性检查。
 
+### 16.11 AI 会话日志（transcript）
+
+`ai-transcript.ts` 直接读 AI 工具的会话日志，把里面的文件编辑补发成带 `ai_line_changes` 的心跳。不调用任何 AI 工具的命令行，只做只读解析。
+
+已支持：
+
+- **Claude Code**：`~/.claude/projects/**/*.jsonl`。逐行取 `toolUseResult`，文件路径取 `filePath` 或 `file.filePath`；写判定与官方一致（有 `structuredPatch`、`type` 为 create/update/delete、有 `newString`/`oldString` 视为写；`originalFile` 非空视为读，跳过）；行变更 = `sum(newLines - oldLines)`，无 patch 时用 `newString` 行数减 `oldString` 行数；`/tmp/claude-<uid>/…/tasks/*.output` 这类 sub-agent 产物跳过。项目名取 `cwd` 的末段，时间用日志里的 `timestamp`。
+- **Codex**：`~/.codex/sessions/**/*.jsonl`。从 `apply_patch` 的 `*** Update File:` / `*** Add File:` / `*** Delete File:` 段提取文件，`+`/`-` 行数差作为变更量，相对路径按 `cwd` 补全。
+
+机制：
+
+- 增量读取：按文件记录已消费字节偏移，存在 `globalState`，只解析新增的完整行，末行不完整则留在下次
+- 每 60 秒同步一次，也可用命令「立即扫描 AI 会话日志」手动触发
+- `sync_ai_disabled = true` 整体关闭；`exclude_ai` 按正则跳过指定路径
+- 补发的心跳不受 120 秒节流限制（它们是历史事件），但同样经过项目识别、隐私与过滤逻辑
+
+未支持（官方有 60+ 种）：Cursor、Copilot、Windsurf、Cline、Roo、Continue、Amp、Gemini CLI、Qwen Code、Kimi、DeepSeek 等。加新工具只需在 `ai-transcript.ts` 里补一个 `syncXxx` 函数。
+
 ### 16.10 验证
 
 - 插件 16 个源文件 `tsc` 0 错误
-- 插件单测 18 项全过（INI 解析与合并、正则过滤、隐私开关、16 种清单依赖解析、项目/分支识别、匿名项目名稳定性、心跳缓冲、语言归一）
+- 插件单测 26 项全过（INI 解析与合并、正则过滤、隐私开关、16 种清单依赖解析、项目/分支识别、匿名项目名稳定性、心跳缓冲、语言归一、Claude/Codex transcript 解析与增量读取）
 - 未验证：真机安装（需手动 `vsce package` 后装入 VS Code）
 

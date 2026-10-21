@@ -71,6 +71,7 @@ npm run smoke   # 端到端冒烟（真实 HTTP + 内存库）
 | 远程开发 | 声明 `extensionKind: ["workspace"]`，Remote-SSH / WSL / 容器下跑在远端，`machine_name_id` 按机器区分 |
 | 代理 | `http://` / `https://`（含账号密码），CONNECT 隧道实现，无第三方依赖 |
 | 离线 | 失败心跳写 JSONL，5 分钟自动补传，可 `offline = false` 关闭 |
+| AI 会话日志 | 直接读 Claude Code 与 Codex 的本地会话日志，把 AI 改的文件补发成带 `ai_line_changes` 的心跳（只读，不调用 AI 工具命令） |
 | 诊断 | 一条命令输出生效配置、依赖、日志路径与双连通性检查 |
 
 构建与安装：
@@ -100,6 +101,15 @@ debug = false
 远程开发注意：插件在远端工作区里运行，请求从远端机器发出，`api_url` 必须是远端可达的地址。状态栏会显示 `$(remote)` 前缀，日志里也会写明。
 
 SOCKS 与 NTLM 代理未实现，配置后会在日志里给出明确错误。
+
+AI 会话日志支持的路径：
+
+```
+Claude Code   ~/.claude/projects/**/*.jsonl
+Codex         ~/.codex/sessions/**/*.jsonl
+```
+
+每 60 秒增量扫描一次，也可以用命令「立即扫描 AI 会话日志」手动触发。`sync_ai_disabled = true` 关闭，`exclude_ai` 按正则排除路径。Cursor、Copilot、Windsurf、Cline 等官方支持的其他工具暂未实现。
 
 ## API
 

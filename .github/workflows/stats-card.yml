@@ -1,0 +1,31 @@
+name: stats-card
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Generate card
+        env:
+          WAKA_API_URL: ${{ secrets.WAKA_API_URL }}
+          WAKA_API_KEY: ${{ secrets.WAKA_API_KEY }}
+        run: node --experimental-strip-types scripts/stats-card.ts
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/wakatime-card.svg || exit 0
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: update wakatime card"
+          git push
+

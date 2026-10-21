@@ -1,0 +1,29 @@
+{
+  "name": "waka-selfhost",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted WakaTime alternative: Node native + TypeScript",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "extensions/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "node --test --experimental-strip-types packages/core/test/aggregate.test.ts packages/core/test/format.test.ts packages/core/test/summary.test.ts packages/core/test/language.test.ts apps/server/test/auth.test.ts",
+    "smoke": "node --experimental-strip-types scripts/smoke.ts",
+    "compare": "node --experimental-strip-types scripts/compare.ts",
+    "build": "tsc -b",
+    "start": "node apps/server/dist/main.js",
+    "dev": "node --experimental-strip-types apps/server/src/main.ts",
+    "e2e": "node --experimental-strip-types scripts/e2e.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/node": "^24.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+services:
+  waka-selfhost:
+    image: ghcr.io/OWNER/waka-selfhost:latest
+    container_name: waka-selfhost
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    environment:
+      PORT: "8800"
+      DATA_DIR: "/data"
+      TZ: "Asia/Shanghai"
+      LOG_LEVEL: "info"
+      # 生产环境务必设置，否则每次删库都会导致已签发的 token 全部失效
+      JWT_SECRET: "change-me-to-a-long-random-string"
+      # 反代到 https 时填写，决定 Cookie 是否带 Secure
+      PUBLIC_URL: "http://localhost:8800"
+    volumes:
+      - waka-data:/data
+
+volumes:
+  waka-data:
+

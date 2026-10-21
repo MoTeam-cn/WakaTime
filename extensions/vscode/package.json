@@ -1,0 +1,103 @@
+{
+  "name": "waka-selfhost",
+  "displayName": "waka-selfhost",
+  "description": "为自托管 waka-selfhost 上报编码活动（不依赖 wakatime-cli）",
+  "version": "0.1.0",
+  "publisher": "waka-selfhost",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "waka-selfhost",
+      "properties": {
+        "wakaSelfhost.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8800/v1",
+          "description": "服务端 API 基址（含 /v1，不带 /api）"
+        },
+        "wakaSelfhost.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "在服务端「设置 → API Key」创建的 waka_ 开头密钥"
+        },
+        "wakaSelfhost.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否上报"
+        },
+        "wakaSelfhost.statusBarEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示今日编码时长"
+        },
+        "wakaSelfhost.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "输出调试日志"
+        },
+        "wakaSelfhost.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/dist/**",
+            "**/out/**",
+            "**/*.min.js"
+          ],
+          "description": "不上报的文件 glob"
+        },
+        "wakaSelfhost.heartbeatIntervalSeconds": {
+          "type": "number",
+          "default": 120,
+          "description": "同一文件两次心跳的最小间隔（秒），默认 120 与官方一致"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "wakaSelfhost.setApiKey",
+        "title": "waka-selfhost: 设置 API Key"
+      },
+      {
+        "command": "wakaSelfhost.setApiUrl",
+        "title": "waka-selfhost: 设置 API 地址"
+      },
+      {
+        "command": "wakaSelfhost.openDashboard",
+        "title": "waka-selfhost: 打开看板"
+      },
+      {
+        "command": "wakaSelfhost.toggleStatusBar",
+        "title": "waka-selfhost: 开关状态栏"
+      },
+      {
+        "command": "wakaSelfhost.toggle",
+        "title": "waka-selfhost: 暂停/恢复上报"
+      },
+      {
+        "command": "wakaSelfhost.flushOffline",
+        "title": "waka-selfhost: 立即补传离线心跳"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0"
+  },
+  "type": "commonjs"
+}

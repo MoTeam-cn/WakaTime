@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": false,
+    "lib": [
+      "ES2023"
+    ],
+    "types": [
+      "node",
+      "vscode"
+    ],
+    "composite": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

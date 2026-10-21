@@ -4,26 +4,97 @@ on:
   push:
     tags: [ "v*" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本号（留空则用 package.json 里的版本）"
+        required: false
+        type: string
+      dry_run:
+        description: "只打包不上传（验证用）"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: publish-vscode
+  cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+
       - name: Install
         run: npm install --no-audit --no-fund
+
       - name: Build extension
         run: npx tsc -b extensions/vscode
+
+      - name: Resolve version and validate
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./extensions/vscode/package.json').version")
+          INPUT_VERSION="${{ inputs.version }}"
+
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="$PKG_VERSION"
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "::error::tag v$TAG_VERSION 与 extensions/vscode/package.json 的版本 $PKG_VERSION 不一致，先改 package.json 再打 tag"
+              exit 1
+            fi
+          fi
+
+          if [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "::warning::手动指定的版本 $VERSION 与 package.json 的 $PKG_VERSION 不一致，将以 $VERSION 发布"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "发布版本：$VERSION"
+
+      - name: Package vsix
+        working-directory: extensions/vscode
+        run: |
+          npx --yes @vscode/vsce package --no-dependencies \
+            --out "../../waka-selfhost-${{ steps.ver.outputs.version }}.vsix"
+
       - name: Publish to Marketplace
+        if: ${{ inputs.dry_run != true }}
         working-directory: extensions/vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "缺少 VSCE_PAT secret，跳过发布"
-            exit 0
+          set -euo pipefail
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "::error::缺少 VSCE_PAT secret，请在仓库 Settings → Secrets and variables → Actions 里添加"
+            exit 1
           fi
-          npx --yes @vscode/vsce publish --no-dependencies
+          npx --yes @vscode/vsce publish --no-dependencies \
+            --packagePath "../../waka-selfhost-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Upload vsix artifact
+        if: ${{ inputs.dry_run == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: waka-selfhost-*.vsix
+
+      - name: Attach vsix to release
+        if: ${{ github.event_name == 'push' && inputs.dry_run != true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: waka-selfhost-${{ steps.ver.outputs.version }}.vsix

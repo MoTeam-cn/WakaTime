@@ -1,7 +1,7 @@
 {
   "name": "waka-selfhost",
   "displayName": "waka-selfhost",
-  "description": "把编码活动上报到你自己的 WakaTime 兼容服务端（不依赖 wakatime-cli）",
+  "description": "把编码活动上报到自建的 WakaTime 兼容服务端，不依赖 wakatime-cli",
   "version": "0.3.0",
   "publisher": "mo-cn",
   "license": "Apache-2.0",
@@ -15,7 +15,8 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
   ],
   "extensionKind": [
     "workspace"
@@ -188,5 +189,17 @@
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "wakatime",
+    "time tracking",
+    "coding activity",
+    "productivity",
+    "self-hosted",
+    "statistics"
+  ],
+  "homepage": "https://github.com/Mo-cn/WakaTime#readme",
+  "bugs": {
+    "url": "https://github.com/Mo-cn/WakaTime/issues"
   }
 }

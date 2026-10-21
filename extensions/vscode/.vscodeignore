@@ -1,0 +1,8 @@
+**/*.ts
+!**/*.d.ts
+test/**
+src/**
+tsconfig.json
+tsconfig.tsbuildinfo
+**/*.map
+.gitignore

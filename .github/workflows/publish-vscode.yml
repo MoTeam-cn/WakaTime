@@ -1,0 +1,29 @@
+name: publish-vscode
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build extension
+        run: npx tsc -b extensions/vscode
+      - name: Publish to Marketplace
+        working-directory: extensions/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "缺少 VSCE_PAT secret，跳过发布"
+            exit 0
+          fi
+          npx --yes @vscode/vsce publish --no-dependencies

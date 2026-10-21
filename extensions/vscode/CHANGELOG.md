@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- 新增图标
+- 文档重组：README 精简，细节移到 docs/
+
+
 ## 0.3.1
 
 - publisher 改为 moteam，仓库迁到 MoTeam-cn

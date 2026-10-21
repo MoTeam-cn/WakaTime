@@ -2,9 +2,10 @@
   "name": "waka-selfhost",
   "displayName": "waka-selfhost",
   "description": "把编码活动上报到自建的 WakaTime 兼容服务端，不依赖 wakatime-cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "moteam",
   "license": "Apache-2.0",
+  "icon": "icon.png",
   "type": "commonjs",
   "repository": {
     "type": "git",

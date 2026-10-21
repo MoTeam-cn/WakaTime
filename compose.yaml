@@ -1,6 +1,6 @@
 services:
   waka-selfhost:
-    image: ghcr.io/mo-cn/wakatime:latest
+    image: ghcr.io/moteam-cn/wakatime:latest
     container_name: waka-selfhost
     restart: unless-stopped
     ports:

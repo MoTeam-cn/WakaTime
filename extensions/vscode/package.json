@@ -3,12 +3,12 @@
   "displayName": "waka-selfhost",
   "description": "把编码活动上报到自建的 WakaTime 兼容服务端，不依赖 wakatime-cli",
   "version": "0.3.0",
-  "publisher": "mo-cn",
+  "publisher": "MoTeam",
   "license": "Apache-2.0",
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Mo-cn/WakaTime.git",
+    "url": "https://github.com/MoTeam-cn/WakaTime.git",
     "directory": "extensions/vscode"
   },
   "engines": {
@@ -198,8 +198,8 @@
     "self-hosted",
     "statistics"
   ],
-  "homepage": "https://github.com/Mo-cn/WakaTime#readme",
+  "homepage": "https://github.com/MoTeam-cn/WakaTime#readme",
   "bugs": {
-    "url": "https://github.com/Mo-cn/WakaTime/issues"
+    "url": "https://github.com/MoTeam-cn/WakaTime/issues"
   }
 }
